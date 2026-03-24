@@ -1,0 +1,12 @@
+# Files and directories excluded from Composer/Packagist releases.
+# These are present in the git repository for development purposes
+# but will not be downloaded when users run `composer require`.
+
+docs/           export-ignore
+plans/          export-ignore
+archive/        export-ignore
+tests/          export-ignore
+.github/        export-ignore
+phpunit.xml     export-ignore
+testbench.yaml  export-ignore
+CLAUDE.md       export-ignore
