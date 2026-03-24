@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+    bootstrap="vendor/autoload.php"
+    colors="true"
+    failOnWarning="true"
+    failOnRisky="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests</directory>
+            <exclude>tests/Integration</exclude>
+        </testsuite>
+        <testsuite name="Integration">
+            <directory>tests/Integration</directory>
+        </testsuite>
+    </testsuites>
+    <php>
+        <env name="DB_CONNECTION" value="mariadb"/>
+        <env name="DB_DRIVER" value="mariadb"/>
+        <env name="DB_HOST" value="127.0.0.1"/>
+        <env name="DB_PORT" value="3306"/>
+        <env name="DB_DATABASE" value="laravel_vector"/>
+        <env name="DB_USERNAME" value="laravel_vector"/>
+        <env name="DB_PASSWORD" value="laravel_vector"/>
+    </php>
+</phpunit>
