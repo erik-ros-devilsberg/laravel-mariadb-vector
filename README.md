@@ -1,7 +1,7 @@
 # Laravel MariaDB Vector
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/devilsberg/laravel-mariadb-vector.svg?style=flat-square)](https://packagist.org/packages/devilsberg/laravel-mariadb-vector)
-[![Tests](https://img.shields.io/github/actions/workflow/status/devilsberg/laravel-mariadb-vector/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/devilsberg/laravel-mariadb-vector/actions/workflows/tests.yml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/erik-ros-devilsberg/laravel-mariadb-vector/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/erik-ros-devilsberg/laravel-mariadb-vector/actions/workflows/tests.yml)
 [![License](https://img.shields.io/packagist/l/devilsberg/laravel-mariadb-vector.svg?style=flat-square)](https://packagist.org/packages/devilsberg/laravel-mariadb-vector)
 [![Ko-fi](https://img.shields.io/badge/support-ko--fi-FF5E5B?style=flat-square&logo=ko-fi&logoColor=white)](https://ko-fi.com/devilsberg)
 
@@ -69,13 +69,19 @@ $article->save();
 ### 4. Search by similarity
 
 ```php
+use Devilsberg\LaravelMariadbVector\Distance;
+
 $queryVector = $yourEmbeddingProvider->embed('climate change effects');
 
 $results = Article::query()
-    ->whereVectorSimilarTo('embedding', $queryVector, 0.5)
-    ->orderByVectorDistance('embedding', $queryVector)
-    ->selectVectorDistance('embedding', $queryVector, as: 'score')
+    ->nearestNeighbors('embedding', $queryVector, Distance::Cosine)
+    ->limit(10)
     ->get();
+
+// Each result has a `score` column — higher is more similar (0–1)
+foreach ($results as $article) {
+    echo $article->title . ' — ' . $article->score;
+}
 ```
 
 ## Bring Your Own Embeddings
@@ -195,7 +201,47 @@ Article::query()
 
 Generates: `VEC_DISTANCE_COSINE(\`embedding\`, VEC_FromText(?)) as \`score\``
 
+### nearestNeighbors
+
+The recommended macro for most use cases. Computes the distance **once** per row as a normalized `score` column and orders results by highest score first. More efficient than chaining the three individual macros.
+
+```php
+nearestNeighbors(
+    string $column,
+    array $input,
+    Distance $distance = Distance::Cosine
+)
+```
+
+```php
+use Devilsberg\LaravelMariadbVector\Distance;
+
+Article::query()
+    ->nearestNeighbors('embedding', $queryVector, Distance::Cosine)
+    ->limit(10)
+    ->get();
+
+// With Euclidean distance
+Article::query()
+    ->nearestNeighbors('embedding', $queryVector, Distance::Euclidean)
+    ->limit(5)
+    ->get();
+```
+
+Generates:
+```sql
+SELECT *, 1.0 - (VEC_DISTANCE_COSINE(`embedding`, VEC_FromText(?))) as `score`
+FROM `articles`
+ORDER BY `score` desc
+```
+
+The `score` is a normalized similarity value — higher means more similar:
+- **Cosine:** `1.0 - distance`, range approximately `[-1, 1]` (in practice `[0, 1]` for LLM embeddings)
+- **Euclidean:** `1.0 - distance / SQRT(2)`, normalized to approximately `[0, 1]`
+
 ### Combining macros
+
+For advanced queries where you need threshold filtering alongside ordering, use the individual macros:
 
 ```php
 $results = Article::query()
