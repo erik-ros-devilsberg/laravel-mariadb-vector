@@ -45,6 +45,11 @@
             ]
         }
     },
+    "source": {
+        "type": "git",
+        "url": "https://github.com/erik-ros-devilsberg/laravel-mariadb-vector",
+        "reference": "main"
+    },
     "minimum-stability": "stable",
     "prefer-stable": true
 }

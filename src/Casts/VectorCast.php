@@ -17,8 +17,9 @@ class VectorCast implements CastsAttributes
      *   value is read back as text. Detected by the leading "[" character.
      *
      * - Raw bytes: the native storage format returned when SELECTing a VECTOR
-     *   column directly. Each float is 4 bytes; unpack('f*', ...) converts the
-     *   byte string back into a PHP float array.
+     *   column directly. Each float is 4 bytes; unpack('g*', ...) converts the
+     *   byte string back into a PHP float array. 'g' = 32-bit IEEE 754
+     *   little-endian (explicit byte order), which is what MariaDB sends.
      *
      * @param  array<string, mixed>  $attributes
      * @return array<float>|null
@@ -42,9 +43,10 @@ class VectorCast implements CastsAttributes
             return array_map('floatval', $decoded);
         }
 
-        // Binary format: native MariaDB VECTOR storage (32-bit IEEE 754 floats)
+        // Binary format: native MariaDB VECTOR storage (32-bit IEEE 754 little-endian floats).
+        // 'g*' forces little-endian interpretation regardless of host byte order.
         if (is_string($value) && strlen($value) > 0) {
-            $unpacked = unpack('f*', $value);
+            $unpacked = unpack('g*', $value);
 
             return array_values($unpacked);
         }

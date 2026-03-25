@@ -43,8 +43,9 @@ class VectorCastTest extends TestCase
         $cast = new VectorCast();
         $model = $this->createMockModel();
 
-        // MariaDB stores VECTOR columns as binary packed 32-bit IEEE 754 floats
-        $binary = pack('f*', 0.1, 0.2, 0.3);
+        // MariaDB stores VECTOR columns as binary packed 32-bit IEEE 754 little-endian floats.
+        // 'g*' = little-endian float (explicit byte order), matching what MariaDB actually sends.
+        $binary = pack('g*', 0.1, 0.2, 0.3);
 
         $result = $cast->get($model, 'embedding', $binary, []);
 

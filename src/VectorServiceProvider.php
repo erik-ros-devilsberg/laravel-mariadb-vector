@@ -2,6 +2,7 @@
 
 namespace Devilsberg\LaravelMariadbVector;
 
+use Devilsberg\LaravelMariadbVector\Distance;
 use Illuminate\Database\Eloquent\Builder;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
@@ -98,6 +99,19 @@ class VectorServiceProvider extends PackageServiceProvider
                 "{$distanceFn}(`{$column}`, VEC_FromText(?)) as `{$as}`",
                 [$vectorString]
             );
+        });
+
+        // Compute distance once as a normalized score alias, ordered highest score first.
+        // Generates: SELECT *, <score_expr> as `score` FROM ... ORDER BY `score` desc
+        Builder::macro('nearestNeighbors', function (string $column, array $input, Distance $distance = Distance::Cosine) {
+            $fn = $distance->toSqlFunction();
+            $vectorString = json_encode($input);
+            $distanceSql = "{$fn}(`{$column}`, VEC_FromText(?))";
+            $scoreSql = $distance->wrapAsScore($distanceSql);
+
+            return $this
+                ->selectRaw("*, {$scoreSql} as `score`", [$vectorString])
+                ->orderByRaw('`score` desc');
         });
     }
 }
