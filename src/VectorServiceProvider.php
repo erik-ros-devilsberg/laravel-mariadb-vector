@@ -4,6 +4,8 @@ namespace Devilsberg\LaravelMariadbVector;
 
 use Devilsberg\LaravelMariadbVector\Distance;
 use Illuminate\Database\Eloquent\Builder;
+use Devilsberg\LaravelMariadbVector\Schema\Grammars\MariaDbGrammar;
+use Devilsberg\LaravelMariadbVector\Schema\Grammars\MySqlGrammar;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 
@@ -38,6 +40,7 @@ class VectorServiceProvider extends PackageServiceProvider
             throw new \InvalidArgumentException('DOT product distance is not supported by MariaDB');
         }
 
+        $this->registerSchemaMacros();
         $this->registerQueryBuilderMacros();
     }
 
@@ -56,6 +59,27 @@ class VectorServiceProvider extends PackageServiceProvider
             'DOT'       => throw new \InvalidArgumentException('DOT product distance is not supported by MariaDB'),
             default     => throw new \InvalidArgumentException("Unsupported distance metric: {$metric}"),
         };
+    }
+
+    private function registerSchemaMacros(): void
+    {
+        // Laravel 12 provides Blueprint::vectorIndex() natively, but its base
+        // Grammar::compileVectorIndex() throws RuntimeException for non-Postgres
+        // drivers. Macros cannot override real methods, so we replace the schema
+        // grammar on the default connection with our own subclass that overrides
+        // compileVectorIndex() to emit MariaDB's ADD VECTOR INDEX syntax.
+        $connection = $this->app['db']->connection();
+        $driver = $connection->getDriverName();
+
+        $grammar = match ($driver) {
+            'mariadb' => new MariaDbGrammar($connection),
+            'mysql'   => new MySqlGrammar($connection),
+            default   => null,
+        };
+
+        if ($grammar !== null) {
+            $connection->setSchemaGrammar($grammar);
+        }
     }
 
     private function registerQueryBuilderMacros(): void

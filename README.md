@@ -37,6 +37,7 @@ Schema::create('articles', function (Blueprint $table) {
     $table->string('title');
     $table->text('body');
     $table->vector('embedding', 768);
+    $table->vectorIndex('embedding'); // enables fast ANN search
     $table->timestamps();
 });
 ```
@@ -83,6 +84,42 @@ foreach ($results as $article) {
     echo $article->title . ' — ' . $article->score;
 }
 ```
+
+## Vector Indexes
+
+Without a vector index every similarity search performs a full table scan — fine for thousands of rows, slow at scale. MariaDB 11.7 supports `VECTOR INDEX` for approximate nearest neighbor (ANN) lookups, exposed via the standard `vectorIndex()` Blueprint method that Laravel 12 provides.
+
+### Adding an index in a migration
+
+```php
+Schema::create('articles', function (Blueprint $table) {
+    $table->id();
+    $table->vector('embedding', 768);
+    $table->vectorIndex('embedding'); // ALTER TABLE ... ADD VECTOR INDEX runs after CREATE TABLE
+    $table->timestamps();
+});
+```
+
+### Custom index name
+
+By default the index name follows Laravel's standard index naming — `{table}_{column}_vectorindex`:
+
+```php
+$table->vectorIndex('embedding');                       // → articles_embedding_vectorindex
+$table->vectorIndex('embedding', 'articles_vec_idx');   // → articles_vec_idx (custom)
+```
+
+### Adding an index to an existing table
+
+```php
+Schema::table('articles', function (Blueprint $table) {
+    $table->vectorIndex('embedding');
+});
+```
+
+> **Note:** MariaDB requires the vector column to be `NOT NULL` to add a vector index. Attempting to index a nullable vector column will raise a database error.
+>
+> **Note:** MariaDB 11.7 supports only **one** `VECTOR INDEX` per table. Attempting to add a second one will raise a database error.
 
 ## Bring Your Own Embeddings
 

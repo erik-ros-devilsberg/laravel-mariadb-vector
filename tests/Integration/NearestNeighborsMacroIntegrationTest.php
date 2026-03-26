@@ -8,9 +8,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-/**
- * @group integration
- */
+#[\PHPUnit\Framework\Attributes\Group('integration')]
 class NearestNeighborsMacroIntegrationTest extends MariaDBTestCase
 {
     private const TABLE = 'integration_nn_items';
