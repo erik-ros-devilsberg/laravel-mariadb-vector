@@ -56,6 +56,56 @@ class VectorCastTest extends TestCase
         $this->assertEqualsWithDelta(0.3, $result[2], 0.0001);
     }
 
+    public function test_get_decodes_binary_vector_whose_first_byte_is_an_opening_bracket(): void
+    {
+        $cast = new VectorCast();
+        $model = $this->createMockModel();
+
+        // Regression: ~1 in 256 binary vectors start with byte 0x5B (ASCII '['),
+        // which the old leading-'[' check misrouted to json_decode, crashing the read.
+        // Craft a float whose little-endian low byte is 0x5B by unpacking known bytes.
+        $firstFloat = unpack('g', "\x5B\x00\x00\x3F")[1];
+
+        $binary = pack('g*', $firstFloat, 0.2, 0.3);
+        $this->assertSame("\x5B", $binary[0], 'Test setup: binary must start with 0x5B');
+
+        $result = $cast->get($model, 'embedding', $binary, []);
+
+        $this->assertIsArray($result);
+        $this->assertCount(3, $result);
+        $this->assertEqualsWithDelta($firstFloat, $result[0], 0.000001);
+        $this->assertEqualsWithDelta(0.2, $result[1], 0.0001);
+        $this->assertEqualsWithDelta(0.3, $result[2], 0.0001);
+    }
+
+    public function test_get_decodes_four_byte_binary_that_is_also_valid_bare_json(): void
+    {
+        $cast = new VectorCast();
+        $model = $this->createMockModel();
+
+        // The bytes "12.5" are a valid 4-byte packed float AND valid bare JSON (a number).
+        // Only strings starting with '[' may take the JSON path; this must unpack as binary.
+        $binary = '12.5';
+        $expected = unpack('g', $binary)[1];
+
+        $result = $cast->get($model, 'embedding', $binary, []);
+
+        $this->assertIsArray($result);
+        $this->assertCount(1, $result);
+        $this->assertEqualsWithDelta($expected, $result[0], 0.000001);
+    }
+
+    public function test_get_throws_for_value_that_is_neither_json_nor_packed_length(): void
+    {
+        $cast = new VectorCast();
+        $model = $this->createMockModel();
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        // 9 bytes: not valid JSON, not a multiple of 4 — genuine corruption
+        $cast->get($model, 'embedding', 'corrupt!!', []);
+    }
+
     public function test_get_returns_null_for_null(): void
     {
         $cast = new VectorCast();

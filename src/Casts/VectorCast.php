@@ -14,44 +14,48 @@ class VectorCast implements CastsAttributes
      * MariaDB returns VECTOR columns in two formats depending on context:
      *
      * - JSON string ("[0.1, 0.2, 0.3]"): returned by VEC_ToText() or when the
-     *   value is read back as text. Detected by the leading "[" character.
+     *   value is read back as text.
      *
      * - Raw bytes: the native storage format returned when SELECTing a VECTOR
      *   column directly. Each float is 4 bytes; unpack('g*', ...) converts the
      *   byte string back into a PHP float array. 'g' = 32-bit IEEE 754
      *   little-endian (explicit byte order), which is what MariaDB sends.
      *
+     * A leading "[" alone cannot distinguish the two: ~1 in 256 binary vectors
+     * start with byte 0x5B (ASCII "["). The JSON path therefore requires the
+     * whole string to validate as JSON; anything else with a length that is a
+     * multiple of 4 is treated as packed binary. Only values matching neither
+     * format (genuine corruption) throw.
+     *
      * @param  array<string, mixed>  $attributes
      * @return array<float>|null
      */
     public function get(Model $model, string $key, mixed $value, array $attributes): ?array
     {
-        if ($value === null) {
+        if ($value === null || ! is_string($value) || $value === '') {
             return null;
         }
 
-        // JSON string format from VEC_ToText() — e.g. "[0.1, 0.2, 0.3]"
-        if (is_string($value) && str_starts_with($value, '[')) {
-            $decoded = json_decode($value, true);
-
-            if ($decoded === null) {
-                throw new \InvalidArgumentException(
-                    "Malformed JSON vector string for key '{$key}': {$value}"
-                );
-            }
-
-            return array_map('floatval', $decoded);
+        // JSON string format from VEC_ToText() — e.g. "[0.1, 0.2, 0.3]".
+        // The leading-"[" check alone is not enough (binary can start with 0x5B),
+        // and json_validate() alone is not enough either: a 4-byte binary like
+        // "12.5" is valid bare JSON. Both conditions together identify real JSON
+        // arrays; a packed binary that is also a complete JSON array is impossible
+        // in practice (IEEE 754 bytes are not printable JSON).
+        if (str_starts_with($value, '[') && json_validate($value)) {
+            return array_map('floatval', json_decode($value, true));
         }
 
         // Binary format: native MariaDB VECTOR storage (32-bit IEEE 754 little-endian floats).
         // 'g*' forces little-endian interpretation regardless of host byte order.
-        if (is_string($value) && strlen($value) > 0) {
-            $unpacked = unpack('g*', $value);
-
-            return array_values($unpacked);
+        // A packed vector is always a multiple of 4 bytes.
+        if (strlen($value) % 4 === 0) {
+            return array_values(unpack('g*', $value));
         }
 
-        return null;
+        throw new \InvalidArgumentException(
+            "Vector value for key '{$key}' is neither a valid JSON array nor packed binary floats."
+        );
     }
 
     /**
